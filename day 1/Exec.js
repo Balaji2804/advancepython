@@ -20,7 +20,7 @@ const ExecutionCount = () => {
         throw new Error('Invalid logs data format');
       }
 
-      const processedData = processFailoverData(logs);
+      const processedData = processFailoverData(logs, timeZone); // Pass the current time zone
       setFailoverData(processedData);
       setError(null);
     } catch (err) {
@@ -29,7 +29,7 @@ const ExecutionCount = () => {
     } finally {
       setLoading(false);
     }
-  }, [cache.platforms]);
+  }, [cache.platforms, timeZone]); // Include timeZone as a dependency
 
   useEffect(() => {
     fetchData();
@@ -43,14 +43,14 @@ const ExecutionCount = () => {
     return app ? app.TeamName : 'Unknown';
   };
 
-  const formatTimestamp = (timestamp) => {
+  const formatTimestamp = (timestamp, tz) => {
     const date = new Date(timestamp);
-    return timeZone === 'IST'
+    return tz === 'IST'
       ? date.toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' })
       : date.toLocaleString('en-US', { timeZone: 'America/New_York' });
   };
 
-  const processFailoverData = (logs) => {
+  const processFailoverData = (logs, tz) => {
     const teamStats = {};
 
     if (cache.platforms) {
@@ -69,7 +69,7 @@ const ExecutionCount = () => {
     }
 
     logs.slice().reverse().forEach(log => {
-      const timestamp = formatTimestamp(log.timestamp || new Date());
+      const timestamp = formatTimestamp(log.timestamp || new Date(), tz);
       log.results.succeeded?.forEach(appName => {
         const team = getTeamForApp(appName);
         if (teamStats[team]) {
@@ -198,41 +198,6 @@ const ExecutionCount = () => {
               </Bar>
             </BarChart>
           </ResponsiveContainer>
-        </div>
-
-        <div className="row mt-4">
-          {failoverData.map(team => (
-            <div key={team.team} className="col-md-4 mb-3">
-              <div className="card">
-                <div className="card-body">
-                  <h5 className="card-title">{team.team}</h5>
-                  <div className="list-group list-group-flush">
-                    <div className="list-group-item d-flex justify-content-between align-items-center">
-                      Total Operations
-                      <span className="badge bg-primary rounded-pill">{team.total}</span>
-                    </div>
-                    <div className="list-group-item d-flex justify-content-between align-items-center">
-                      Succeeded
-                      <span className="badge bg-success rounded-pill">{team.succeeded}</span>
-                    </div>
-                    <div className="list-group-item d-flex justify-content-between align-items-center">
-                      Failed
-                      <span className="badge bg-danger rounded-pill">{team.failed}</span>
-                    </div>
-                    <div className="list-group-item d-flex justify-content-between align-items-center">
-                      Skipped
-                      <span className="badge bg-warning rounded-pill">{team.skipped}</span>
-                    </div>
-                  </div>
-                  {team.recentOperations.length > 0 && (
-                    <div className="mt-3">
-                      <small className="text-muted">Latest operation: {team.recentOperations[0].timestamp}</small>
-                    </div>
-                  )}
-                </div>
-              </div>
-            </div>
-          ))}
         </div>
       </div>
     </div>
