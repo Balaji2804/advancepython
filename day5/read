@@ -14,14 +14,6 @@
         "value": "${secrets_prefix}"
       },
       {
-        "name": "kinesis_stream",
-        "value": "${kinesis_stream}"
-      },
-      {
-        "name": "kinesis_region",
-        "value": "${kinesis_region}"
-      },
-      {
         "name": "region",
         "value": "${region}"
       },
@@ -58,13 +50,12 @@
     "image": "${ecr_url}:${build_version}",
     "name": "${container_name}",
     "logConfiguration": {
-      "logDriver": "awsfirelens",
+      "logDriver": "awslogs",
       "options": {
-        "Name": "kinesis",
-        "region": "${kinesis_region}",
-        "stream": "${kinesis_stream}",
-        "log_key": "log",
-        "auto_create_stream": "true"
+        "awslogs-group": "${log_group_name}",
+        "awslogs-region": "${region}",
+        "awslogs-create-group": "true",
+        "awslogs-stream-prefix": "/ecs/${stack_name}"
       }
     }
   },
@@ -78,10 +69,11 @@
     "logConfiguration": {
       "logDriver": "awsfirelens",
       "options": {
-        "Name": "cloudwatch",
+        "Name": "kinesis",
         "region": "${region}",
-        "log_group_name": "${log_group_name}",
-        "log_stream_prefix": "/ecs/${stack_name}"
+        "stream": "${kinesis_stream}",
+        "log_key": "log",
+        "auto_create_stream": "true"
       }
     }
   }
