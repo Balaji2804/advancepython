@@ -1,8 +1,5 @@
 [
   {
-    "name": "${container_name}",
-    "image": "${ecr_url}:${build_version}",
-    "essential": true,
     "environment": [
       {
         "name": "build_version",
@@ -13,8 +10,8 @@
         "value": "${stage}"
       },
       {
-        "name": "region",
-        "value": "${region}"
+        "name": "secrets_prefix",
+        "value": "${secrets_prefix}"
       },
       {
         "name": "kinesis_stream",
@@ -23,6 +20,22 @@
       {
         "name": "kinesis_region",
         "value": "${kinesis_region}"
+      },
+      {
+        "name": "region",
+        "value": "${region}"
+      },
+      {
+        "name": "AWS_PLATFORM",
+        "value": "ecs-fargate"
+      },
+      {
+        "name": "app_name",
+        "value": "${app_name}"
+      },
+      {
+        "name": "common_token_secret_name",
+        "value": "${common_token_secret_name}"
       }
     ],
     "entryPoint": [
@@ -34,16 +47,16 @@
         "containerPort": 80,
         "hostPort": 80,
         "protocol": "tcp"
-      },
-      {
-        "containerPort": 5170,
-        "hostPort": 5170,
-        "protocol": "tcp"
       }
     ],
     "command": [
-      "./start.sh | tee >(nc localhost 5170)"
+      "./start.sh"
     ],
+    "linuxParameters": null,
+    "cpu": 0,
+    "essential": true,
+    "image": "${ecr_url}:${build_version}",
+    "name": "${container_name}",
     "logConfiguration": {
       "logDriver": "awsfirelens",
       "options": {
@@ -62,13 +75,6 @@
     "firelensConfiguration": {
       "type": "fluentbit"
     },
-    "portMappings": [
-      {
-        "containerPort": 5170,
-        "hostPort": 5170,
-        "protocol": "tcp"
-      }
-    ],
     "logConfiguration": {
       "logDriver": "awslogs",
       "options": {
