@@ -60,7 +60,7 @@
     "logConfiguration": {
       "logDriver": "awsfirelens",
       "options": {
-        "Name": "firehose", 
+        "Name": "kinesis",
         "region": "${kinesis_region}",
         "stream": "${kinesis_stream}",
         "log_key": "log",
