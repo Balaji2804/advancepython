@@ -60,7 +60,7 @@
     "logConfiguration": {
       "logDriver": "awsfirelens",
       "options": {
-        "Name": "kinesis",
+        "Name": "firehose", 
         "region": "${kinesis_region}",
         "stream": "${kinesis_stream}",
         "log_key": "log",
@@ -76,12 +76,12 @@
       "type": "fluentbit"
     },
     "logConfiguration": {
-      "logDriver": "awslogs",
+      "logDriver": "awsfirelens",
       "options": {
-        "awslogs-group": "${log_group_name}",
-        "awslogs-region": "${region}",
-        "awslogs-create-group": "true",
-        "awslogs-stream-prefix": "/ecs/${stack_name}"
+        "Name": "cloudwatch",
+        "region": "${region}",
+        "log_group_name": "${log_group_name}",
+        "log_stream_prefix": "/ecs/${stack_name}"
       }
     }
   }
