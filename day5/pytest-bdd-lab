@@ -1,0 +1,13 @@
+"logConfiguration": {
+  "logDriver": "awsfirelens",
+  "options": {
+    "Name": "kinesis",
+    "region": "${region}",
+    "stream": "${kinesis_stream}",
+    "log_key": "log",
+    "auto_create_stream": "true",
+    "Retry_Limit": "5",
+    "log_level": "info",
+    "workers": "2"
+  }
+}
