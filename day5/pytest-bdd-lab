@@ -64,11 +64,7 @@
         "region": "${kinesis_region}",
         "stream": "${kinesis_stream}",
         "log_key": "log",
-        "auto_create_stream": "true",
-        "awslogs-group": "${log_group_name}",
-        "awslogs-region": "${region}",
-        "awslogs-stream-prefix": "/ecs/${stack_name}",
-        "awslogs-create-group": "true"
+        "auto_create_stream": "true"
       }
     }
   },
@@ -78,6 +74,15 @@
     "essential": true,
     "firelensConfiguration": {
       "type": "fluentbit"
+    },
+    "logConfiguration": {
+      "logDriver": "awslogs",
+      "options": {
+        "awslogs-group": "${log_group_name}",
+        "awslogs-region": "${region}",
+        "awslogs-create-group": "true",
+        "awslogs-stream-prefix": "/ecs/${stack_name}"
+      }
     }
   }
 ]
