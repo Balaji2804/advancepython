@@ -59,11 +59,8 @@
     "logConfiguration": {
       "logDriver": "awsfirelens",
       "options": {
-        "Name": "firehose",
-        "region": "${kinesis_region}",
-        "stream": "${kinesis_stream}",
-        "log_key": "log",
-        "auto_create_stream": "true"
+        "Name": "firelens",
+        "region": "${kinesis_region}"
       }
     }
   },
@@ -76,15 +73,6 @@
       "options": {
         "config-file-type": "s3",
         "config-file-value": "s3://your-bucket-name/fluent-bit.conf"
-      }
-    },
-    "logConfiguration": {
-      "logDriver": "awslogs",
-      "options": {
-        "awslogs-group": "${log_group_name}",
-        "awslogs-region": "${region}",
-        "awslogs-create-group": "true",
-        "awslogs-stream-prefix": "/ecs/${stack_name}"
       }
     }
   }
