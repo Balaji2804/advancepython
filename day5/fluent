@@ -57,12 +57,13 @@
       }
     ],
     "logConfiguration": {
-      "logDriver": "awslogs",
+      "logDriver": "awsfirelens",
       "options": {
-        "awslogs-group": "${log_group_name}",
-        "awslogs-region": "${region}",
-        "awslogs-create-group": "true",
-        "awslogs-stream-prefix": "/ecs/${stack_name}"
+        "Name": "firehose",
+        "region": "${kinesis_region}",
+        "stream": "${kinesis_stream}",
+        "log_key": "log",
+        "auto_create_stream": "true"
       }
     }
   },
@@ -78,13 +79,12 @@
       }
     },
     "logConfiguration": {
-      "logDriver": "awsfirelens",
+      "logDriver": "awslogs",
       "options": {
-        "Name": "kinesis",
-        "region": "${kinesis_region}",
-        "stream": "${kinesis_stream}",
-        "log_key": "log",
-        "auto_create_stream": "true"
+        "awslogs-group": "${log_group_name}",
+        "awslogs-region": "${region}",
+        "awslogs-create-group": "true",
+        "awslogs-stream-prefix": "/ecs/${stack_name}"
       }
     }
   }
