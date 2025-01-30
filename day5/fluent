@@ -1,5 +1,23 @@
 [
   {
+    "name": "${container_name}",
+    "image": "${ecr_url}:${build_version}",
+    "essential": true,
+    "cpu": 0,
+    "entryPoint": [
+      "sh",
+      "-c"
+    ],
+    "command": [
+      "./start.sh"
+    ],
+    "portMappings": [
+      {
+        "containerPort": 80,
+        "hostPort": 80,
+        "protocol": "tcp"
+      }
+    ],
     "environment": [
       {
         "name": "build_version",
@@ -38,25 +56,27 @@
         "value": "${common_token_secret_name}"
       }
     ],
-    "entryPoint": [
-      "sh",
-      "-c"
-    ],
-    "portMappings": [
-      {
-        "containerPort": 80,
-        "hostPort": 80,
-        "protocol": "tcp"
+    "logConfiguration": {
+      "logDriver": "awslogs",
+      "options": {
+        "awslogs-group": "${log_group_name}",
+        "awslogs-region": "${region}",
+        "awslogs-create-group": "true",
+        "awslogs-stream-prefix": "/ecs/${stack_name}"
       }
-    ],
-    "command": [
-      "./start.sh"
-    ],
-    "linuxParameters": null,
-    "cpu": 0,
+    }
+  },
+  {
+    "name": "log-router",
+    "image": "amazon/aws-for-fluent-bit:latest",
     "essential": true,
-    "image": "${ecr_url}:${build_version}",
-    "name": "${container_name}",
+    "firelensConfiguration": {
+      "type": "fluentbit",
+      "options": {
+        "config-file-type": "s3",
+        "config-file-value": "s3://your-bucket-name/fluent-bit.conf"
+      }
+    },
     "logConfiguration": {
       "logDriver": "awsfirelens",
       "options": {
@@ -67,23 +87,5 @@
         "auto_create_stream": "true"
       }
     }
-  },
-  {
-    "name": "log-router",
-    "image": "amazon/aws-for-fluent-bit:latest",
-    "essential": true,
-    "firelensConfiguration": {
-      "type": "fluentbit"
-    },
-    "logConfiguration": {
-      "logDriver": "awslogs",
-      "options": {
-        "awslogs-group": "${log_group_name}",
-        "awslogs-region": "${region}",
-        "awslogs-create-group": "true",
-        "awslogs-stream-prefix": "/ecs/${stack_name}"
-      }
-    }
   }
 ]
-I want the logs to be incorporated in both kinesis and cloudwatch. I am using fluentbit image as sidecar. I tried to include it in a single container but it's working. I want the application logs to be inserted in both kinesis and cloudwatch. Currently the sidecar logs are flowing in the cloudwatch and kinesis is working fine. I also tried different approaches but none of them works. Is there a way to copy the logs from kinesis to cloudwatch or to copy the logs from main container into cloudwatch before sending the logs to kinesis?
