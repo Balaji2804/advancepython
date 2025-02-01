@@ -1,1 +1,15 @@
-a
+version: '3.8'
+
+services:
+  resiliency-framework:
+    build: ..
+    ports:
+      - "8080:8080"
+    environment:
+      - AZURE_CLIENT_ID=${AZURE_CLIENT_ID}
+      - AZURE_CLIENT_SECRET=${AZURE_CLIENT_SECRET}
+      - AZURE_TENANT_ID=${AZURE_TENANT_ID}
+      - REDIRECT_URI=${REDIRECT_URI}
+      - S3_BUCKET_NAME=${S3_BUCKET_NAME}
+      - CONFIG_KEY=${CONFIG_KEY}
+      - SECRET_KEY=${SECRET_KEY}
