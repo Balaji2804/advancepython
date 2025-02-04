@@ -1,0 +1,147 @@
+.user-guide {
+  max-width: 800px;
+  margin: 0 auto;
+  padding: 20px;
+  font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+}
+
+.guide-container {
+  background: white;
+  border-radius: 12px;
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.1);
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  min-height: 500px;
+}
+
+.content-area {
+  flex: 1;
+  padding: 30px;
+  overflow-y: auto;
+  max-height: 400px; 
+  scroll-behavior: smooth;
+}
+
+/* Scrollbar Styling */
+.content-area::-webkit-scrollbar {
+  width: 12px;
+}
+
+.content-area::-webkit-scrollbar-track {
+  background: #f4f4f4;
+}
+
+.content-area::-webkit-scrollbar-thumb {
+  background: #3498db;
+  border-radius: 6px;
+  border: 3px solid #f4f4f4;
+}
+
+.content-area::-webkit-scrollbar-thumb:hover {
+  background: #2980b9;
+}
+
+/* Headings */
+h2, h3, h4 {
+  color: #2c3e50;
+  margin-bottom: 10px;
+}
+
+/* Bullet Points */
+ul {
+  list-style: none;
+  padding-left: 20px;
+}
+
+ul li {
+  position: relative;
+  padding-left: 20px;
+  margin-bottom: 8px;
+  color: #34495e;
+}
+
+ul li::before {
+  content: "•";
+  position: absolute;
+  left: 0;
+  color: #3498db;
+  font-weight: bold;
+}
+
+/* Accordion Feature */
+.feature-card {
+  background: #f9fafb;
+  border: 1px solid #e2e8f0;
+  padding: 15px;
+  margin-bottom: 15px;
+  border-radius: 8px;
+  transition: background 0.3s;
+  cursor: pointer;
+}
+
+.feature-card:hover {
+  background: #e6f7ff;
+}
+
+.feature-card h4 {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  cursor: pointer;
+}
+
+.arrow {
+  font-size: 14px;
+  color: #3498db;
+}
+
+/* Navigation Buttons */
+.nav-button {
+  background: #3498db;
+  color: white;
+  border: none;
+  padding: 10px 20px;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: background 0.3s;
+}
+
+.nav-button:hover {
+  background: #2980b9;
+}
+
+.progress-bar {
+  background: #ecf0f1;
+  height: 6px;
+  border-radius: 4px;
+  overflow: hidden;
+  margin-bottom: 10px;
+}
+
+.progress-fill {
+  background: #3498db;
+  height: 100%;
+  transition: width 0.3s;
+}
+
+/* Section Dots */
+.section-dots {
+  display: flex;
+  justify-content: center;
+  gap: 8px;
+}
+
+.dot {
+  width: 10px;
+  height: 10px;
+  background: #cbd5e1;
+  border-radius: 50%;
+  cursor: pointer;
+  transition: transform 0.3s;
+}
+
+.dot.active {
+  background: #3498db;
+  transform: scale(1.3);
+}
