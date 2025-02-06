@@ -1,79 +1,66 @@
-[
-  {
-    "environment": [
-      {
-        "name": "build_version",
-        "value": "${build_version}"
-      },
-      {
-        "name": "stage",
-        "value": "${stage}"
-      },
-      {
-        "name": "secrets_prefix",
-        "value": "${secrets_prefix}"
-      },
-      {
-        "name": "kinesis_stream",
-        "value": "${kinesis_stream}"
-      },
-      {
-        "name": "kinesis_region",
-        "value": "${kinesis_region}"
-      },
-      {
-        "name": "region",
-        "value": "${region}"
-      },
-      {
-        "name": "AWS_PLATFORM",
-        "value": "ecs-fargate"
-      },
-      {
-        "name": "app_name",
-        "value": "${app_name}"
-      },
-      {
-        "name": "common_token_secret_name",
-        "value": "${common_token_secret_name}"
-      }
-    ],
-    "entryPoint": [
-      "sh",
-      "-c"
-    ],
-    "portMappings": [
-      {
-        "containerPort": 80,
-        "hostPort": 80,
-        "protocol": "tcp"
-      }
-    ],
-    "command": [
-      "./start.sh"
-    ],
-    "linuxParameters": null,
-    "cpu": 0,
-    "essential": true,
-    "image": "${ecr_url}:${build_version}",
-    "name": "${container_name}",
-    "logConfiguration": {
-      "logDriver": "awsfirelens",
-      "options": {
-        "Name": "kinesis",
-        "region": "${kinesis_region}",
-        "stream": "${kinesis_stream}",
-        "log_key": "log",
-        "auto_create_stream": "true"
-      }
-    }
-  },
-  {
-    "name": "log-router",
-    "image": "amazon/aws-for-fluent-bit:latest",
-    "essential": true,
-    "firelensConfiguration": {
-      "type": "fluentbit"
-    }
-  }
-]
+# Use Eclipse Temurin JDK image based on Ubuntu Focal for building the application
+FROM eclipse-temurin:17-jdk-focal as builder
+
+# Install updates, jq, and AWS CLI
+RUN apt-get update && \
+    apt-get install -y jq curl unzip && \
+    curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip" && \
+    unzip awscliv2.zip && \
+    ./aws/install && \
+    rm -rf awscliv2.zip /var/lib/apt/lists/* /aws
+
+# Create the working directory
+RUN mkdir -p /app
+
+# Set the working directory inside the builder stage
+WORKDIR /app
+
+# Copy Maven wrapper and configuration files
+COPY .mvn/ .mvn
+COPY mvnw pom.xml ./
+
+# Install all project dependencies
+RUN ./mvnw dependency:resolve
+RUN ./mvnw dependency:resolve-plugins
+
+# Copy the project source code
+COPY src ./src
+COPY start.sh ./src
+COPY bootstrap.sh ./src
+
+
+# Build the project without running tests to reduce build time
+RUN ./mvnw package -DskipTests
+
+# Start a new build stage to create a smaller final image
+FROM eclipse-temurin:17-jre-focal
+
+# Set the working directory in the final image
+WORKDIR /app
+
+# Copy the built artifact from the builder stage
+COPY --from=builder /app/target/*.jar ./app.jar
+
+
+# Install AWS CLI in the runtime image
+RUN apt-get update && \
+    apt-get install -y curl unzip jq && \
+    curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip" && \
+    unzip awscliv2.zip && \
+    ./aws/install && \
+    rm -rf awscliv2.zip /var/lib/apt/lists/* /aws
+
+
+
+# Copy only .sh files from the src directory in the builder stage
+COPY --from=builder /app/src/*.sh ./
+
+
+# Ensure scripts have execute permissions
+
+# Ensure scripts have execute permissions
+RUN chmod +x ./*.sh
+ENV ENVIRONMENT=${ENVIRONMENT}
+
+# Define command to execute the bootstrap script followed by the start of the application
+CMD ["sh", "-c", "./bootstrap.sh && ./start.sh"]
