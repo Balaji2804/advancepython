@@ -1,26 +1,75 @@
-"# Use an AWS Lambda base image for Python
-FROM public.ecr.aws/lambda/python:3.9 AS build
-# Install Node.js and npm
-RUN curl -sL https://rpm.nodesource.com/setup_14.x | bash - && \
-    yum install -y nodejs && \
-    yum clean all && \
-    rm -rf /var/cache/yum
-# Set the working directory in the container
-WORKDIR /var/task
-# Copy application code
-COPY . .
-# Install required Node.js packages and build the React application
-WORKDIR /var/task/frontend
-RUN npm install && npm run build
-# Use a smaller runtime image
-FROM public.ecr.aws/lambda/python:3.9
-# Copy the built application from the build stage
-COPY --from=build /var/task /var/task
-# Set execute permissions for the script
-RUN chmod +x /var/task/backend/run.py && pwd
-WORKDIR /var/task/backend
-RUN pip install --no-cache-dir -r requirements.txt
-# Command to run Lambda function locally using mangum
-CMD ["backend.run.handler"]"
-In the above Dockerfile below two lines is getting more time for execution "WORKDIR /var/task/frontend
-RUN npm install && npm run build". Frontend is taking more time since it's downloading node modules. Is there a way to minimize the time for building Dockerfile.
+# Use Eclipse Temurin JDK image based on Ubuntu Focal for building the application
+FROM eclipse-temurin:17-jdk-focal as builder
+
+# Install dependencies
+RUN apt-get update && \
+    apt-get install -y jq curl unzip && \
+    curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip" && \
+    unzip awscliv2.zip && \
+    ./aws/install && \
+    rm -rf awscliv2.zip /var/lib/apt/lists/* /aws
+
+# Install Fluent Bit
+RUN curl -fsSL https://packages.fluentbit.io/fluentbit.key | apt-key add - && \
+    echo "deb https://packages.fluentbit.io/ubuntu/focal focal main" | tee /etc/apt/sources.list.d/fluentbit.list && \
+    apt-get update && \
+    apt-get install -y fluent-bit && \
+    rm -rf /var/lib/apt/lists/*
+
+# Create the working directory
+RUN mkdir -p /app
+
+# Set the working directory inside the builder stage
+WORKDIR /app
+
+# Copy Maven wrapper and configuration files
+COPY .mvn/ .mvn
+COPY mvnw pom.xml ./
+
+# Install project dependencies
+RUN ./mvnw dependency:resolve
+RUN ./mvnw dependency:resolve-plugins
+
+# Copy the project source code
+COPY src ./src
+COPY start.sh ./src
+COPY bootstrap.sh ./src
+
+# Build the project
+RUN ./mvnw package -DskipTests
+
+# Start a new build stage
+FROM eclipse-temurin:17-jre-focal
+
+# Set the working directory in the final image
+WORKDIR /app
+
+# Copy built JAR from the builder stage
+COPY --from=builder /app/target/*.jar ./app.jar
+
+# Install AWS CLI in the runtime image
+RUN apt-get update && \
+    apt-get install -y curl unzip jq && \
+    curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip" && \
+    unzip awscliv2.zip && \
+    ./aws/install && \
+    rm -rf awscliv2.zip /var/lib/apt/lists/* /aws
+
+# Install Fluent Bit in the final runtime image
+RUN curl -fsSL https://packages.fluentbit.io/fluentbit.key | apt-key add - && \
+    echo "deb https://packages.fluentbit.io/ubuntu/focal focal main" | tee /etc/apt/sources.list.d/fluentbit.list && \
+    apt-get update && \
+    apt-get install -y fluent-bit && \
+    rm -rf /var/lib/apt/lists/*
+
+# Copy Fluent Bit configuration file
+COPY fluent-bit.conf /etc/fluent-bit/fluent-bit.conf
+
+# Copy shell scripts
+COPY --from=builder /app/src/*.sh ./
+
+# Ensure scripts have execute permissions
+RUN chmod +x ./*.sh
+
+# Start Fluent Bit in the background and then start the application
+CMD fluent-bit -c /etc/fluent-bit/fluent-bit.conf & ./bootstrap.sh && ./start.sh
