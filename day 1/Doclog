@@ -1,0 +1,6 @@
+# Add a validation script to check log paths
+COPY check_logs.sh /usr/local/bin/check_logs.sh
+RUN chmod +x /usr/local/bin/check_logs.sh
+
+# Start Fluent Bit and validate log paths before running the application
+CMD /usr/local/bin/check_logs.sh && fluent-bit -c /etc/fluent-bit/fluent-bit.conf & ./bootstrap.sh && ./start.sh
