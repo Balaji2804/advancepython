@@ -1,0 +1,234 @@
+Create a Terraform configuration file named main.tf for an AWS ECS Fargate deployment with the following requirements and generate the code
+1. AWS Provider and Backend
+	• AWS provider configuration using var.deployment_region
+	• S3 backend in us-east-2 with only region parameter, remove other parameters within terraform block
+	• Remove terraform required providers block
+	
+2. Local Variables
+	• stack_name_stage = "${var.stack_name}-${var.stage}"
+	• short_stack_name_stage = "app-srvc-${var.stage}"
+	• Owner="team_email_id"
+	• default_tags including Owner and StackName
+	• ecs_task_container_name = "${local.stack_name_stage}-container"
+	• route53_record_name = "${local.stack_name_stage}-${join("", [for s in split("-", var.deployment_region) : substr(s, 0, 1)])}"
+3. Data Sources
+	• Don't include ${path.module} for fetching  task_definition.json
+	• template_file.ecs_task_definition_template from "task_definition.json" with variables: 
+		○ region = var.deployment_region
+		○ build_version = var.build_version
+		○ stage = var.stage
+		○ secrets_prefix = var.secrets_prefix
+		○ kinesis_stream = var.kinesis_stream
+		○ kinesis_region = var.kinesis_region
+		○ stack_name = var.stack_name
+		○ ecr_url = var.ecr_repository_url
+		○ container_name = local.ecs_task_container_name
+		○ log_group_name = aws_cloudwatch_log_group.ecs_service_log_group.name
+		○ appd_app_name = var.appd_app_name
+		○ appd_tier = var.appd_tier
+		○ appd_node = var.appd_node
+		○ aws_secret_name = var.aws_secret_name
+		○ common_token_secret_name = var.common_token_secret_name
+		○ websec_keys_url = var.websec_keys_url
+		○ websec_allowed_issuers = var.websec_allowed_issuers
+		○ app_name = var.app_name
+	• aws_caller_identity.current
+	• aws_route53_zone.selected using var.route53_zone_id
+	Add data source for AWS security group: 
+		• data.aws_security_group.vpc_default_security_group with: 
+			§ vpc_id = var.alb_vpc_id
+			§ filter for group-name with value "default"
+	
+4. ECS Resources
+	• aws_ecs_cluster.ecs_cluster with name = "${local.stack_name_stage}-ecs-cluster" and include tags = local.default_tags
+	• aws_ecs_task_definition.ecs_task_definition with: 
+		○ family = local.stack_name_stage
+		○ Fargate compatibility
+		cpu                      = var.ecs_service_task_cpu
+		memory                   = var.ecs_service_task_memory
+		○ execution_role_arn = "arn:aws:iam::${data.aws_caller_identity.current.account_id}:role/OneCloud/<execution-role>"
+		○ task_role_arn = "arn:aws:iam::${data.aws_caller_identity.current.account_id}:role/OneCloud/<execution-role>"
+		○ container_definitions = data.template_file.ecs_task_definition_template.rendered
+	• aws_security_group.ecssg named "ecs-${local.stack_name_stage}-sg" with: 
+		○ Ingress on port 80 from VPC default security group
+	     Separate egress blocks for IPv4 and IPv6: 
+		○ IPv4 egress with cidr_blocks = ["0.0.0.0/0"]
+		○ IPv6 egress with ipv6_cidr_blocks = ["::/0"]
+		○ tags = local.default_tags
+	• aws_ecs_service.ecs_service with name = "${local.stack_name_stage}-ecs-service", linked to: 
+		○ ALB target group
+		○ container_name = local.ecs_task_container_name
+		○ subnets = var.ecs_service_subnets
+		○ desired_count    = var.ecs_service_desired_count
+		○ security_groups = [data.aws_security_group.vpc_default_security_group.id]
+		○ Fargate launch type with platform version 1.4.0
+		○ Remove assign_public_ip = true from network configuration
+		○ Remove tags = local.default_tags
+		○ Add depends_on = [aws_lb_listener.ecs_service_lb_listener]
+		
+5. CloudWatch Logs
+	• aws_cloudwatch_log_group.ecs_service_log_group with name = "${local.stack_name_stage}-log-group"
+	• Remove retention_in_days = 30 and tags = local.default_tags
+6. Load Balancer Configuration
+	• aws_lb.ecs_service_lb with name = "${local.stack_name_stage}-alb"
+	•   security_groups            = var.load_balancer_security_groups
+	•   subnets                    = var.load_balancer_subnets
+	• internal                   = true
+	• load_balancer_type         = "application"
+	• Add enable_deletion_protection = false
+	• tags                       = local.default_tags
+	• Add ip_address_type = "ipv4"
+	• aws_lb_target_group.ecs_service_lb_target_group with: 
+		○ name = var.stage == "preprod" ? "${local.short_stack_name_stage}-lb-tg" : "${local.stack_name_stage}-lb-tg"
+		○ port        = 80
+		○ protocol    = "HTTP"
+		○ vpc_id = var.alb_vpc_id
+		○ tags                       = local.default_tags
+		○ health check path "/health"
+		○ Add target_type = "ip"
+		○ Remove interval, timeout, healthy_threshold, and unhealthy_threshold parameters from health_check
+		
+	• aws_lb_listener.ecs_service_lb_listener (HTTPS/443) with: 
+		○ ssl_policy = var.load_balancer_listener_ssl_policy
+		○ certificate_arn = var.load_balancer_listener_certificate_arn
+		○ default_action type = "forward" with target_group_arn = aws_lb_target_group.ecs_service_lb_target_group.arn
+	• aws_lb_listener.ecs_service_lb_listener_http (HTTP/80) and include default action type as forward with target_group_arn=aws_lb_target_group.ecs_service_lb_target_group.arn
+7. API Gateway Configuration
+	• aws_apigatewayv2_api.api_gateway_api with: 
+		○ name using string interpolation of var.stage and var.secrets_prefix
+		○ protocol_type = "HTTP"
+8. API Gateway Integration
+	• aws_apigatewayv2_integration.api_gateway_integration with: 
+		○ api_id = aws_apigatewayv2_api.api_gateway_api.id
+		○ description = "Api gateway with a load balancer"
+		○ integration_type = "HTTP_PROXY"
+		○ integration_uri = aws_lb_listener.ecs_service_lb_listener_http.arn
+		○ integration_method = "ANY"
+		○ connection_type = "VPC_LINK"
+		○ connection_id = var.vpc_link
+9. API Gateway Route
+	• aws_apigatewayv2_route.api_gateway_route with: 
+		○ api_id = aws_apigatewayv2_api.api_gateway_api.id
+		○ route_key = "ANY /{proxy+}"
+		○ target = "integrations/${aws_apigatewayv2_integration.api_gateway_integration.id}"
+10. API Gateway Stage
+	• aws_apigatewayv2_stage.api_gateway_stage with: 
+		○ api_id = aws_apigatewayv2_api.api_gateway_api.id
+		○ name = var.stage
+		○ auto_deploy = true
+11. API Gateway Domain Name
+	• aws_apigatewayv2_domain_name.apigateway_domain with: 
+		○ domain_name using string interpolation of var.secrets_prefix, var.stage, and var.gateway_domain
+		○ domain_name_configuration block with: 
+			§ certificate_arn = var.load_balancer_listener_certificate_arn
+			§ endpoint_type = "REGIONAL"
+			§ security_policy = "TLS_1_2"
+12. API Gateway Domain Mapping
+	• aws_apigatewayv2_api_mapping.api_gateway_domain_mapping with: 
+		○ api_id = aws_apigatewayv2_api.api_gateway_api.id
+		○ domain_name = aws_apigatewayv2_domain_name.apigateway_domain.id
+		○ stage = aws_apigatewayv2_stage.api_gateway_stage.id
+13. API Gateway Regional Domain
+	• aws_apigatewayv2_domain_name.apigateway_domain_regional with: 
+		○ domain_name = "${var.secrets_prefix}-${var.stage}-${var.deployment_region}.${var.gateway_domain}"
+		○ domain_name_configuration block with: 
+			§ certificate_arn = var.load_balancer_listener_certificate_arn
+			§ endpoint_type = "REGIONAL"
+			§ security_policy = "TLS_1_2"
+14. Regional API Gateway Domain Mapping
+	• aws_apigatewayv2_api_mapping.api_gateway_domain_mapping_regional with: 
+		○ api_id = aws_apigatewayv2_api.api_gateway_api.id
+		○ domain_name = aws_apigatewayv2_domain_name.apigateway_domain_regional.id
+		○ stage = aws_apigatewayv2_stage.api_gateway_stage.id
+15. API Gateway Health Check
+	• aws_route53_health_check.apigateway_health_check with: 
+		○ fqdn = "${var.secrets_prefix}-${var.stage}.${var.gateway_domain}"
+		○ type = "HTTPS"
+		○ resource_path = "/health"
+		○ port = 443
+		○ failure_threshold = 5
+		○ request_interval = 10
+		○ tags with "Name" set using string interpolation of var.secrets_prefix, var.stage, var.deployment_region, and "-hc"
+16. Route53 API Gateway Record
+	• aws_route53_record.route53_apigateway_record with: 
+		○ name using string interpolation of var.secrets_prefix and var.stage
+		○ set_identifier using string interpolation of var.secrets_prefix, var.stage, var.deployment_region
+		○ type = "A"
+		○ zone_id = var.route53_zone_id
+		○ latency_routing_policy block with: 
+			§ region = var.deployment_region
+		○ alias block with: 
+			§ name = aws_apigatewayv2_domain_name.apigateway_domain.domain_name_configuration[0].target_domain_name
+			§ zone_id = aws_apigatewayv2_domain_name.apigateway_domain.domain_name_configuration[0].hosted_zone_id
+			§ evaluate_target_health = true
+		○ health_check_id = aws_route53_health_check.apigateway_health_check.id
+17. Route53 Regional API Gateway Record
+	• aws_route53_record.route53_apigateway_regional_record with: 
+		○ name using string interpolation of var.secrets_prefix, var.stage, and var.deployment_region
+		○ type = "A"
+		○ zone_id = var.route53_zone_id
+		○ alias block with: 
+			§ name = aws_apigatewayv2_domain_name.apigateway_domain_regional.domain_name_configuration[0].target_domain_name
+			§ zone_id = aws_apigatewayv2_domain_name.apigateway_domain_regional.domain_name_configuration[0].hosted_zone_id
+			§ evaluate_target_health = true
+18. Route53 configurations (to be deleted after Kong deprecation):
+
+
+Route53 Health Check (for Kong deprecation):
+
+• Create a resource "aws_route53_health_check" "health_check" with:
+• fqdn = "${var.secrets_prefix}-${var.stage}.${var.gateway_domain}".
+• type = "HTTPS"
+• resource_path = "/health"
+• port = 443
+• failure_threshold = 5
+• request_interval = 10
+• Tags with Name = "${local.stack_name_stage}-${var.deployment_region}-hc".
+
+
+Route53 Record:
+
+• Create a resource "aws_route53_record" "route53_record" with:
+• name = local.stack_name_stage.
+• set_identifier = "${local.stack_name_stage}-${var.deployment_region}".
+• type = "A".
+• zone_id = var.route53_zone_id.
+• latency_routing_policy block with:
+• region = var.deployment_region.
+• alias block with:
+• name = aws_lb.ecs_service_lb.dns_name.
+• zone_id = aws_lb.ecs_service_lb.zone_id.
+• evaluate_target_health = true.
+• health_check_id = aws_route53_health_check.health_check.id.
+
+
+Region-Specific Route53 Record:
+
+• Create a resource "aws_route53_record" "region_specific_route53_record" with:
+• name = "${local.stack_name_stage}-${var.deployment_region}".
+• type = "A".
+• zone_id = var.route53_zone_id.
+• alias block with:
+• name = aws_lb.ecs_service_lb.dns_name.
+• zone_id = aws_lb.ecs_service_lb.zone_id.
+• evaluate_target_health = true.
+
+19. Auto-scaling Configuration
+• aws_appautoscaling_target.app_scale_target for ECS service with: 
+	• max_capacity = var.ecs_autoscale_max_instances
+	• min_capacity = var.ecs_autoscale_min_instances
+• aws_appautoscaling_policy.target_scaling based on CPU utilization with: 
+	• name = "app-scale-policy"
+	• target_value placed outside of target_tracking_scaling_policy_configuration
+	• scale_in_cooldown = var.app_scale_in_cooldown
+	• scale_out_cooldown = var.app_scale_out_cooldown
+20. Output Configuration
+	• ECS service name
+	• ECS cluster name
+	• New task revision
+	• Service endpoint with value = join(".", [aws_route53_record.route53_record.name, data.aws_route53_zone.selected.name])
+	• Task definition ARN with value = aws_ecs_service.ecs_service.task_definition  
+The code should implement all components exactly as specified, using the provided naming conventions throughout. The resulting infrastructure will depend on:
+	• task_definition.json file in the same directory
+	• Variables defined in stage_variables/dev/us-east-2.tfvars
+Follow AWS best practices for ECS Fargate deployments.
