@@ -1,0 +1,24 @@
+resource "aws_apigatewayv2_domain_name" "apigateway_domain_regional" {
+  domain_name = "${var.secrets_prefix}-${var.stage}-${var.deployment_region}.${var.gateway_domain}"
+  domain_name_configuration {
+    certificate_arn = var.load_balancer_listener_certificate_arn
+    endpoint_type   = "REGIONAL"
+    security_policy = "TLS_1_2"
+  }
+}
+resource "aws_apigatewayv2_api_mapping" "api_gateway_domain_mapping_regional" {
+  api_id      = aws_apigatewayv2_api.api_gateway_api.id
+  domain_name = aws_apigatewayv2_domain_name.apigateway_domain_regional.id
+  stage       = aws_apigatewayv2_stage.api_gateway_stage.id
+}
+
+resource "aws_route53_record" "route53_apigateway_regional_record" {
+  name    = "${var.secrets_prefix}-${var.stage}-${var.deployment_region}"
+  type    = "A"
+  zone_id = var.route53_zone_id
+  alias {
+    name                   = aws_apigatewayv2_domain_name.apigateway_domain_regional.domain_name_configuration[0].target_domain_name
+    zone_id                = aws_apigatewayv2_domain_name.apigateway_domain_regional.domain_name_configuration[0].hosted_zone_id
+    evaluate_target_health = true
+  }
+}
