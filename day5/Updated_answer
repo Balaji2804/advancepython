@@ -1,0 +1,121 @@
+### **Updated Terraform Configuration Prompt for AWS ECS Fargate Deployment with API Gateway and Route 53**
+
+#### **1. AWS Provider and Backend**
+- Define an AWS provider using **`var.deployment_region`**.
+- Configure an **S3 backend** in **`us-east-2`** with only the `region` parameter.
+- **Do not** include the `terraform required_providers` block.
+
+#### **2. Local Variables**
+- Define `stack_name_stage`, `short_stack_name_stage`, `Owner`, `default_tags`, `ecs_task_container_name`, and `route53_record_name` as per requirements.
+
+#### **3. Data Sources**
+- Fetch **ECS Task Definition Template** (`task_definition.json`) **without using** `${path.module}`.
+- Define `template_file.ecs_task_definition_template` with the necessary variables.
+- Include:
+  - `aws_caller_identity.current`
+  - `aws_route53_zone.selected` using `var.route53_zone_id`
+  - `aws_security_group.vpc_default_security_group` for default security group filtering by `group-name="default"`
+
+#### **4. ECS Resources**
+- Create:
+  - `aws_ecs_cluster`
+  - `aws_ecs_task_definition`
+  - `aws_security_group`
+  - `aws_ecs_service`
+  - Ensure correct **ingress/egress rules** for security groups.
+
+#### **5. CloudWatch Logs**
+- Define `aws_cloudwatch_log_group` **without** `retention_in_days` and `tags`.
+
+#### **6. Load Balancer Configuration**
+- Define:
+  - `aws_lb` with `internal = true`, `enable_deletion_protection = false`, and `ip_address_type = "ipv4"`
+  - `aws_lb_target_group` **without** health check intervals.
+  - `aws_lb_listener` for **HTTPS (443) and HTTP (80)**.
+
+#### **7. API Gateway Configuration**
+- Create `aws_apigatewayv2_api` with:
+  - `protocol_type = "HTTP"`
+  - `name` using `var.stage` and `var.secrets_prefix`
+
+#### **8. API Gateway Integration**
+- Define `aws_apigatewayv2_integration` as an `HTTP_PROXY` with:
+  - `integration_uri = aws_lb_listener.ecs_service_lb_listener_http.arn`
+  - `connection_type = "VPC_LINK"`
+  - `connection_id = var.vpc_link`
+
+#### **9. API Gateway Route**
+- Create `aws_apigatewayv2_route` for all requests (`ANY /{proxy+}`).
+
+#### **10. API Gateway Stage**
+- Define `aws_apigatewayv2_stage` with `auto_deploy = true`.
+
+#### **11. API Gateway Domain Name**
+- Create `aws_apigatewayv2_domain_name` with `TLS_1_2` security policy.
+
+#### **12. API Gateway Domain Mapping**
+- Map API to domain using `aws_apigatewayv2_api_mapping`.
+
+#### **13. API Gateway Regional Domain**
+- Define `aws_apigatewayv2_domain_name.apigateway_domain_regional` with:
+  - `domain_name = "${var.secrets_prefix}-${var.stage}-${var.deployment_region}.${var.gateway_domain}"`
+  - `certificate_arn = var.load_balancer_listener_certificate_arn`
+  - `endpoint_type = "REGIONAL"`
+  - `security_policy = "TLS_1_2"`
+
+#### **14. Regional API Gateway Domain Mapping**
+- Create `aws_apigatewayv2_api_mapping.api_gateway_domain_mapping_regional` with:
+  - `api_id = aws_apigatewayv2_api.api_gateway_api.id`
+  - `domain_name = aws_apigatewayv2_domain_name.apigateway_domain_regional.id`
+  - `stage = aws_apigatewayv2_stage.api_gateway_stage.id`
+
+#### **15. API Gateway Health Check**
+- Define `aws_route53_health_check.apigateway_health_check` with:
+  - `fqdn = "${var.secrets_prefix}-${var.stage}.${var.gateway_domain}"`
+  - `type = "HTTPS"`
+  - `port = 443`
+
+#### **16. Route 53 API Gateway Record**
+- Create `aws_route53_record.route53_apigateway_record` with:
+  - `latency_routing_policy` using `var.deployment_region`
+  - `alias` block pointing to **API Gateway domain**
+  - `health_check_id` referencing API Gateway health check.
+
+#### **17. Route 53 Regional API Gateway Record**
+- Define `aws_route53_record.route53_apigateway_regional_record` with:
+  - `name = "${var.secrets_prefix}-${var.stage}-${var.deployment_region}"`
+  - `type = "A"`
+  - `zone_id = var.route53_zone_id`
+  - `alias` block with:
+    - `name = aws_apigatewayv2_domain_name.apigateway_domain_regional.domain_name_configuration[0].target_domain_name`
+    - `zone_id = aws_apigatewayv2_domain_name.apigateway_domain_regional.domain_name_configuration[0].hosted_zone_id`
+    - `evaluate_target_health = true`
+
+#### **18. Route 53 Records (For Kong Deprecation)**
+##### **Route 53 Health Check**
+- Define `aws_route53_health_check.health_check` using:
+  - `fqdn = "${var.secrets_prefix}-${var.stage}.${var.gateway_domain}"`
+  - `resource_path = "/health"`
+  - `type = "HTTPS"`
+  - `port = 443`
+
+##### **Route 53 Main Record**
+- Create `aws_route53_record.route53_record` pointing **to ECS Load Balancer**:
+  - `set_identifier = "${local.stack_name_stage}-${var.deployment_region}"`
+  - `alias` pointing to **ECS ALB DNS name**.
+  - `health_check_id` referencing **Kong health check**.
+
+##### **Region-Specific Route 53 Record**
+- Define `aws_route53_record.region_specific_route53_record` with:
+  - `name = "${local.stack_name_stage}-${var.deployment_region}"`
+  - `alias` pointing to **ECS ALB**.
+
+---
+
+### **Ensure Terraform Generates All Required Resources**
+- **All API Gateway components** (API, integration, routes, stages, mappings, domains, health checks).
+- **Route 53 records** for both **API Gateway and Kong deprecation**.
+- **Load Balancer, ECS, CloudWatch Logs, and Security Groups** correctly linked.
+- Remove unnecessary parameters like `assign_public_ip = true`, `retention_in_days`, and redundant tags.
+
+This ensures **Terraform correctly generates all required AWS resources**, including **regional API Gateway configurations and Route 53 records**.
