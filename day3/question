@@ -1,0 +1,42 @@
+I'm getting "image fetching failed" in task:check-commit-in-ecr. I'm using ecr-check.yaml. 
+Below is the build job for demo env which includes above task and I'm also attaching ecr-check.yaml. 
+Credentials are valid and ecr has the mentioned image with tag JUNE2020.
+
+build-job: &BUILD-JOB
+    task: check-commit-in-ecr
+    file: branch/ci/tasks/ecr-check.yaml
+    input_mapping:
+      repo: branch
+      pipeline-metadata: pipeline-metadata
+    on_failure:
+      put: app-docker-image
+      params:
+        build: branch
+        tag_file: branch/.git/HEAD
+        tag_prefix: commit-
+
+jobs:
+#######################
+# Build & Deploy jobs #
+#######################
+
+## Test Environment
+  - name: build-test
+    plan:
+      - in_parallel:
+        - get: branch
+          trigger: true
+        - put: pipeline-metadata
+      - try:
+          <<: *BUILD-JOB
+"--- platform: linux  
+image_resource:   
+type: docker-image   source:     repository: 1780878.dkr.ecr.us-east-1.amazonaws.com/cms-concourse-ci     tag: June2020     aws_access_key_id: ((aws-svc-user.aws_access_key_id))     aws_secret_access_key: ((aws-svc-user.aws_secret_access_key)) inputs:   - name: repo   - name: pipeline-metadata params:   AWS_DEFAULT_REGION: us-east-1   ECR_REPO_NAME: "kie-rules-evaluator"   AWS_ACCESS_KEY_ID: ((aws-svc-user.aws_access_key_id))   AWS_SECRET_ACCESS_KEY: ((aws-svc-user.aws_secret_access_key))   PROD_TEAMS_CHANNEL: ((teams/webhooks.xcpre-prod-notifications))   NON_PROD_TEAMS_CHANNEL: ((teams/webhooks.xcpre-non-prod-notifications)) run:   path: sh   args:     - -c     - |       bash repo/ci/tasks/teams.sh Checking-ECR blue       ECR_IMG_TAG=$(cat repo/.git/HEAD)       ECR_IMG_SHA=$(aws ecr describe-images --region us-east-1 --registry-id 1780878 --repository-name ${ECR_REPO_NAME} --image-ids imageTag=commit-${ECR_IMG_TAG} --output text --query imageDetails[0].imageDigest)"
+
+
+I found the rootcause. When Iuse the public docker image, it's working
+"image_resource:   type: docker-image   source:     repository: alpine     tag: latest"
+But while using below image I'm getting "image fetching failed"
+"image_resource: type: docker-image source: repository: 1780878.dkr.ecr.us-east-1.amazonaws.com/cms-concourse-ci tag: June2020 aws_access_key_id: ((aws-svc-user.aws_access_key_id)) aws_secret_access_key: ((aws-svc-user.aws_secret_access_key))"
+
+Is it image related issues or accessing the image issues. Resolve
